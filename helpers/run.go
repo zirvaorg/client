@@ -3,6 +3,7 @@ package helpers
 import (
 	"bufio"
 	"fmt"
+	"github.com/fatih/color"
 	"os"
 	"strings"
 )
@@ -20,7 +21,8 @@ func Run() error {
 
 	reader := bufio.NewReader(os.Stdin)
 	for {
-		fmt.Print("Enter command: ")
+		d := color.New(color.FgHiGreen, color.Bold)
+		d.Print(">  ")
 		cmdString, err := reader.ReadString('\n')
 		if err != nil {
 			return fmt.Errorf("error reading command: %v", err)
