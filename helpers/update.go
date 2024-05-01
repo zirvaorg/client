@@ -7,9 +7,11 @@ import (
 	"os/exec"
 )
 
-type UpdateHelpers struct{}
+type updateHelper struct{}
 
-func (u *UpdateHelpers) ReplaceNewPackage(url string) error {
+var UpdateHelpers = &updateHelper{}
+
+func (u *updateHelper) ReplaceNewPackage(url string) error {
 	tempFile := "/tmp/zirva-client"
 
 	err := u.downloadNewPackage(url, tempFile)
@@ -29,7 +31,7 @@ func (u *UpdateHelpers) ReplaceNewPackage(url string) error {
 		return err
 	}
 
-	err = u.runNewPackage()
+	err = u.runNewPackage("--hide-brand")
 	if err != nil {
 		return err
 	}
@@ -37,7 +39,7 @@ func (u *UpdateHelpers) ReplaceNewPackage(url string) error {
 	return nil
 }
 
-func (u *UpdateHelpers) downloadNewPackage(url, filePath string) error {
+func (u *updateHelper) downloadNewPackage(url, filePath string) error {
 	file, err := os.Create(filePath)
 	if err != nil {
 		return err
@@ -58,8 +60,8 @@ func (u *UpdateHelpers) downloadNewPackage(url, filePath string) error {
 	return nil
 }
 
-func (u *UpdateHelpers) runNewPackage() error {
-	cmd := exec.Command(os.Args[0], os.Args[1:]...)
+func (u *updateHelper) runNewPackage(params ...string) error {
+	cmd := exec.Command(os.Args[0], append(os.Args[1:], params...)...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -71,7 +73,7 @@ func (u *UpdateHelpers) runNewPackage() error {
 	return nil
 }
 
-func (u *UpdateHelpers) KillCurrentProcess() error {
+func (u *updateHelper) KillCurrentProcess() error {
 	pid := os.Getpid()
 	p, err := os.FindProcess(pid)
 	if err != nil {
