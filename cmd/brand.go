@@ -8,14 +8,17 @@ import (
 
 var Brand = &helpers.Command{
 	Run: func() {
-		fmt.Print("#  ███████╗██╗██████╗ ██╗   ██╗ █████╗\n")
-		fmt.Print("#  ╚══███╔╝██║██╔══██╗██║   ██║██╔══██╗\n")
-		fmt.Print("#    ███╔╝ ██║██████╔╝██║   ██║███████║\n")
-		fmt.Print("#   ███╔╝  ██║██╔══██╗██║   ██║██╔══██║\n")
-		fmt.Print("#  ███████╗██║██║  ██║╚██████╔╝██║  ██║\n")
-		fmt.Print("#  ╚══════╝╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝\n")
-		fmt.Print("#  zirva client v0.1.0 (https://zirva.org)\n")
+		b := color.New(color.FgHiYellow)
+		b.Println("┌──────────────────────────────────────┐")
+		b.Println("│ ███████╗██╗██████╗ ██╗   ██╗ █████╗  │")
+		b.Println("│ ╚══███╔╝██║██╔══██╗██║   ██║██╔══██╗ │")
+		b.Println("│   ███╔╝ ██║██████╔╝██║   ██║███████║ │")
+		b.Println("│  ███╔╝  ██║██╔══██╗╚██╗ ██╔╝██╔══██║ │")
+		b.Println("│ ███████╗██║██████╔╝ ╚████╔╝ ██║  ██║ │")
+		b.Println("│ ╚══════╝╚═╝╚═════╝   ╚═══╝  ╚═╝  ╚═╝ │")
+		b.Println("└──────────────────────────────────────┘")
+		fmt.Print("zirva client v0.1.0 (https://zirva.org)\n")
 		info := color.New(color.FgHiYellow).SprintFunc()
-		fmt.Printf("#  type '%s' for a list of commands\n", info("help"))
+		fmt.Printf("type '%s' for a list of commands\n", info("help"))
 	},
 }
