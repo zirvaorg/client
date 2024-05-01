@@ -17,9 +17,8 @@ var Update = &helpers.Command{
 	Use:         "update",
 	Description: "Update the application",
 	Run: func() {
-		u := &helpers.UpdateHelpers{}
-
-		err := u.ReplaceNewPackage(PackageURL)
+		fmt.Println("Updating...")
+		err := helpers.UpdateHelpers.ReplaceNewPackage(PackageURL)
 		if err != nil {
 			fmt.Println("Update failed:", err)
 			return
@@ -28,9 +27,10 @@ var Update = &helpers.Command{
 		sigs := make(chan os.Signal, 1)
 		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
+		fmt.Println("Update successful. Restarting the application...")
 		go func() {
 			<-sigs
-			err := u.KillCurrentProcess()
+			err := helpers.UpdateHelpers.KillCurrentProcess()
 			if err != nil {
 				fmt.Println("Old process couldn't be kill:", err)
 			}
