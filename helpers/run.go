@@ -26,7 +26,7 @@ func Run() error {
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		d := color.New(color.FgHiGreen, color.Bold)
-		d.Print(">  ")
+		d.Print("> ")
 		cmdString, err := reader.ReadString('\n')
 		if err != nil {
 			return fmt.Errorf("error reading command: %v", err)
