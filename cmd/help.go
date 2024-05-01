@@ -18,7 +18,7 @@ var Help = &helpers.Command{
 				continue
 			}
 
-			fmt.Printf("	%s		%s\n", key(cmd.Use), desc(cmd.Description))
+			fmt.Printf("%s	%s\n", key(cmd.Use), desc(cmd.Description))
 		}
 	},
 }
