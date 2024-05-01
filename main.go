@@ -7,8 +7,9 @@ import (
 
 func init() {
 	helpers.AddCommand(cmd.Help)
-	helpers.AddCommand(cmd.Hello)
 	helpers.AddCommand(cmd.Login)
+	helpers.AddCommand(cmd.Logout)
+	helpers.AddCommand(cmd.Update)
 }
 
 func main() {
