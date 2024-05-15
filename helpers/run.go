@@ -11,10 +11,6 @@ import (
 var CommandMap = make(map[string]*Command)
 
 func Run() error {
-	if CheckAuth() == true {
-		CommandMap["login"].Run()
-	}
-
 	if len(CommandMap) == 0 {
 		return fmt.Errorf("no commands found")
 	}
