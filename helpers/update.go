@@ -31,7 +31,7 @@ func (u *updateHelper) ReplaceNewPackage(url string) error {
 		return err
 	}
 
-	err = u.runNewPackage("--hide-brand")
+	err = u.runNewPackage("--stealth")
 	if err != nil {
 		return err
 	}
