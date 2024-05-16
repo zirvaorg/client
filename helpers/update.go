@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 )
 
 type updateHelper struct{}
@@ -12,7 +13,7 @@ type updateHelper struct{}
 var UpdateHelpers = &updateHelper{}
 
 func (u *updateHelper) ReplaceNewPackage(url string) error {
-	tempFile := "/tmp/zirva-client"
+	tempFile := path.Join(os.TempDir(), "zirva-client")
 
 	err := u.downloadNewPackage(url, tempFile)
 	if err != nil {
@@ -31,7 +32,7 @@ func (u *updateHelper) ReplaceNewPackage(url string) error {
 		return err
 	}
 
-	err = u.runNewPackage("--stealth")
+	err = u.runNewPackage("-stealth")
 	if err != nil {
 		return err
 	}
@@ -67,6 +68,10 @@ func (u *updateHelper) runNewPackage(params ...string) error {
 	cmd.Stdin = os.Stdin
 	err := cmd.Start()
 	if err != nil {
+		return err
+	}
+
+	if err = cmd.Wait(); err != nil {
 		return err
 	}
 
