@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	nextVersion = "v0.0.5"
+	nextVersion = "v0.0.6"
 )
 
 var Update = &helpers.Command{
@@ -18,7 +18,7 @@ var Update = &helpers.Command{
 	Description: "Update the application",
 	Run: func() {
 		fmt.Println("Updating...")
-		packageURL := fmt.Sprintf(package_url.PackageURLFormat, nextVersion)
+		packageURL := fmt.Sprintf(package_url.PackageURLFormat, nextVersion, nextVersion)
 		err := helpers.UpdateHelpers.ReplaceNewPackage(packageURL)
 		if err != nil {
 			fmt.Println("Update failed:", err)
