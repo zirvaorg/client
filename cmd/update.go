@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	nextVersion = "v0.0.4"
+	nextVersion = "v0.0.5"
 )
 
 var Update = &helpers.Command{
