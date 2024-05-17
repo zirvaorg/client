@@ -1,3 +1,5 @@
+//go:build aix || dragonfly || freebsd || (js && wasm) || wasip1 || linux || netbsd || openbsd || solaris || darwin
+
 package internal
 
 import (
