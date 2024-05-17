@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/fatih/color"
+	"os"
 )
 
 var stealth *bool
@@ -17,6 +18,7 @@ func init() {
 	helpers.AddCommand(cmd.Logout)
 	helpers.AddCommand(cmd.Update)
 	helpers.AddCommand(cmd.Exit)
+	helpers.AddCommand(cmd.Pid)
 
 	stealth = flag.Bool("stealth", false, "run in stealth mode") // stealth mode for updating
 	flag.Parse()
@@ -25,6 +27,8 @@ func init() {
 func main() {
 	if *stealth {
 		if helpers.CheckAuth() {
+			fmt.Printf("New PID: %d\n", os.Getpid())
+			fmt.Println("New package just was downloaded is running now.")
 			cmd.Start.Run()
 			return
 		}

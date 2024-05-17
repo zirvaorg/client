@@ -2,15 +2,15 @@ package cmd
 
 import (
 	"client/helpers"
+	"client/internal/package_url"
 	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 )
 
-// PackageURL @todo: change the package URL to github
 const (
-	PackageURL = "https://sercanarga.com/client"
+	nextVersion = "v0.0.1"
 )
 
 var Update = &helpers.Command{
@@ -18,7 +18,8 @@ var Update = &helpers.Command{
 	Description: "Update the application",
 	Run: func() {
 		fmt.Println("Updating...")
-		err := helpers.UpdateHelpers.ReplaceNewPackage(PackageURL)
+		packageURL := fmt.Sprintf(package_url.PackageURLFormat, nextVersion)
+		err := helpers.UpdateHelpers.ReplaceNewPackage(packageURL)
 		if err != nil {
 			fmt.Println("Update failed:", err)
 			return

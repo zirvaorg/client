@@ -1,42 +1,82 @@
 package helpers
 
 import (
+	"archive/tar"
+	"client/internal"
+	"client/internal/package_url"
+	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"path"
 )
 
-type updateHelper struct{}
+type updateHelper struct {
+	decompressor internal.Decompressor
+}
 
-var UpdateHelpers = &updateHelper{}
+var UpdateHelpers = &updateHelper{
+	decompressor: internal.NewUnzip(),
+}
 
 func (u *updateHelper) ReplaceNewPackage(url string) error {
-	tempFile := path.Join(os.TempDir(), "zirva-client")
+	tempDir := os.TempDir()
+	tempZipFile := path.Join(tempDir, fmt.Sprintf("%s.%s", "zirva-client", package_url.ZIP_FILE_EXTENSION))
 
-	err := u.downloadNewPackage(url, tempFile)
+	err := u.downloadNewPackage(url, tempZipFile)
 	if err != nil {
 		return err
 	}
+
+	compressedFile, err := os.Open(tempZipFile)
+	if err != nil {
+		return err
+	}
+	defer compressedFile.Close()
+
+	createdFileName, err := internal.FilenameWithExtension("client")
+
+	if err != nil {
+		return err
+	}
+
+	createdFile, err := os.Create(path.Join(tempDir, createdFileName))
+	_ = os.Chmod(createdFile.Name(), 0777)
+	if err != nil {
+		return err
+	}
+	defer createdFile.Close()
+
+	fmt.Println("Package has been downloaded. Decompressing now.")
+	if err = u.decompressor.Decompress(createdFile, compressedFile); err != nil {
+		return err
+	}
+	fmt.Println("Decompress complete.")
 
 	currentApp := os.Args[0]
+	fmt.Println("Renaming...")
+	if err = os.Rename(createdFile.Name(), currentApp); err != nil {
+		return err
+	}
+	fmt.Println("Setting chmod")
+	if err = os.Chmod(currentApp, 0755); err != nil {
+		return err
+	}
+	fmt.Printf("Main process PID: %d\n", os.Getpid())
 
-	err = os.Rename(tempFile, currentApp)
-	if err != nil {
+	fmt.Println("Running new package.")
+	if err = u.runNewPackage("--stealth"); err != nil {
 		return err
 	}
 
-	err = os.Chmod(currentApp, 0755)
-	if err != nil {
-		return err
-	}
+	return nil
+}
 
-	err = u.runNewPackage("-stealth")
-	if err != nil {
-		return err
-	}
-
+func (u *updateHelper) unzip(tempZipFile io.Reader) error {
+	r := tar.NewReader(tempZipFile)
+	log.Fatal(r.Next())
 	return nil
 }
 
@@ -62,16 +102,16 @@ func (u *updateHelper) downloadNewPackage(url, filePath string) error {
 }
 
 func (u *updateHelper) runNewPackage(params ...string) error {
+	fmt.Println(os.Args[0], append(os.Args[1:], params...))
 	cmd := exec.Command(os.Args[0], append(os.Args[1:], params...)...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 	err := cmd.Start()
-	if err != nil {
-		return err
-	}
 
-	if err = cmd.Wait(); err != nil {
+	fmt.Printf("New PID: %d\n", cmd.Process.Pid)
+
+	if err != nil {
 		return err
 	}
 
@@ -79,12 +119,15 @@ func (u *updateHelper) runNewPackage(params ...string) error {
 }
 
 func (u *updateHelper) KillCurrentProcess() error {
+	fmt.Printf("Current Process: %d\n", os.Getpid())
 	pid := os.Getpid()
 	p, err := os.FindProcess(pid)
 	if err != nil {
 		return err
 	}
+	fmt.Printf("Killing process %d\n", pid)
 	err = p.Kill()
+	fmt.Printf("Killed process %d\n", pid)
 	if err != nil {
 		return err
 	}
