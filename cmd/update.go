@@ -34,10 +34,13 @@ var Update = &helpers.Command{
 		//	}
 		//}()
 
-		err = helpers.UpdateHelpers.ReleaseCurrentProcess()
+		err = helpers.UpdateHelpers.KillCurrentProcess()
 
 		if err != nil {
 			fmt.Println("Main process release failed:", err)
 		}
+
+		fmt.Println("Update succeeded, main process has been released")
+		select {}
 	},
 }

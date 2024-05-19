@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
 )
 
@@ -58,7 +59,12 @@ func (u *updateHelper) ReplaceNewPackage(url string) error {
 	}
 	fmt.Println("Decompress complete.")
 
-	currentApp := os.Args[0]
+	currentApp, err := os.Executable()
+
+	if err != nil {
+		return err
+	}
+
 	fmt.Println("Renaming...")
 	if err = os.Rename(createdFile.Name(), currentApp); err != nil {
 		return err
@@ -70,7 +76,7 @@ func (u *updateHelper) ReplaceNewPackage(url string) error {
 	fmt.Printf("Main process PID: %d\n", os.Getpid())
 
 	fmt.Println("Running new package.")
-	if err = u.runNewPackage("--stealth"); err != nil {
+	if err = u.runNewPackage(currentApp, "--stealth"); err != nil {
 		return err
 	}
 
@@ -105,20 +111,23 @@ func (u *updateHelper) downloadNewPackage(url, filePath string) error {
 }
 
 func (u *updateHelper) runNewPackage(params ...string) error {
-	p, err := os.StartProcess(os.Args[0], append(os.Args[1:], params...), &os.ProcAttr{
-		Files: []*os.File{os.Stdin, os.Stdout, os.Stderr},
-	})
+	executable, err := os.Executable()
+	if err != nil {
+		return err
+	}
 
-	//cmd := exec.Command(os.Args[0], append(os.Args[1:], params...)...)
-	//cmd.Stdout = os.Stdout
-	//cmd.Stderr = os.Stderr
-	//cmd.Stdin = os.Stdin
-	//err := cmd.Start()
+	args := append([]string{executable})
+	fmt.Println(args)
+	cmd := exec.Command("open", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	err = cmd.Start()
 
 	if err != nil {
 		return err
 	}
-	fmt.Printf("New PID: %d\n", p.Pid)
+	fmt.Printf("New PID: %d\n", cmd.Process.Pid)
 
 	return nil
 }
