@@ -1,24 +1,141 @@
 package helpers
 
 import (
-	"archive/tar"
+	"bufio"
 	"client/internal"
 	"client/internal/package_url"
+	"crypto/sha256"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/hashicorp/go-version"
+	"hash"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 )
+
+type release struct {
+	TagName string `json:"tag_name"`
+}
+
+const (
+	githubReleaseApiUri         = "https://api.github.com/repos/zirvaorg/client/releases/latest"
+	bufferSize                  = 65536
+	latestChecksumFileUriFormat = "https://github.com/zirvaorg/client/releases/download/%s/client_%s_checksums.txt"
+)
+
+var (
+	UpdateHelpers = &updateHelper{
+		decompressor: internal.NewUnzip(),
+	}
+	LatestVersion *version.Version
+)
+
+func init() {
+	latestRelease, err := getLatestVersion()
+	if err != nil {
+		log.Fatal("Something went wrong when trying to determine the latest version")
+		return
+	}
+	v, err := version.NewVersion(latestRelease.TagName)
+	if err != nil {
+		log.Fatal("Something went wrong when trying to determine the version")
+		return
+	}
+	LatestVersion = v
+}
+
+func getLatestVersion() (*release, error) {
+	resp, err := http.Get(githubReleaseApiUri)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var releaseResp *release
+	if err := json.NewDecoder(resp.Body).Decode(&releaseResp); err != nil {
+		return nil, err
+	}
+
+	return releaseResp, nil
+}
 
 type updateHelper struct {
 	decompressor internal.Decompressor
 }
 
-var UpdateHelpers = &updateHelper{
-	decompressor: internal.NewUnzip(),
+func (u *updateHelper) IsUpToDate(currentVersion string, latest *version.Version) (bool, error) {
+	current, err := version.NewVersion(currentVersion)
+	if err != nil {
+		return false, err
+	}
+
+	return current.GreaterThanOrEqual(latest), nil // normally we should use just Equal but this way is safer.
+}
+
+func (u *updateHelper) calculateChecksum(hashAlgorithm hash.Hash, reader io.Reader) (string, error) {
+	buf := make([]byte, bufferSize)
+
+	for {
+		switch n, err := reader.Read(buf); err {
+		case nil:
+			hashAlgorithm.Write(buf[:n])
+		case io.EOF:
+			return fmt.Sprintf("%x", hashAlgorithm.Sum(nil)), nil
+		default:
+			return "", errors.New("failed to calculate checksum")
+		}
+	}
+}
+
+func (u *updateHelper) compareChecksum(tempZipFilePath string) (bool, error) {
+	// create new file pointer so reading process won't affect the other one
+	reader, err := os.Open(tempZipFilePath)
+	if err != nil {
+		return false, err
+	}
+	actualChecksum, err := u.calculateChecksum(sha256.New(), reader)
+	if err != nil {
+		return false, err
+	}
+	expectedChecksum, err := u.getChecksumFromGithub()
+	if err != nil {
+		return false, err
+	}
+
+	fmt.Println(actualChecksum, expectedChecksum, actualChecksum == expectedChecksum)
+
+	return actualChecksum == expectedChecksum, nil
+}
+
+func (u *updateHelper) getChecksumFromGithub() (string, error) {
+	checksumUrl := fmt.Sprintf(latestChecksumFileUriFormat, LatestVersion.Original(), LatestVersion.String())
+
+	resp, err := http.Get(checksumUrl)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	fileScanner := bufio.NewScanner(resp.Body)
+	fileScanner.Split(bufio.ScanLines)
+
+	for fileScanner.Scan() {
+		line := strings.Split(fileScanner.Text(), "  ")
+		if len(line) != 2 || !strings.HasPrefix(line[1], "zirva") {
+			return "", errors.New("failed to parse checksum file")
+		}
+		if line[1] == fmt.Sprintf(package_url.ZipFileNameFormat, LatestVersion.Original()) {
+			fmt.Println("Related checksum was found from github")
+			return line[0], nil
+		}
+	}
+	return "", errors.New("failed to find checksum")
 }
 
 func (u *updateHelper) ReplaceNewPackage(url string) error {
@@ -34,7 +151,19 @@ func (u *updateHelper) ReplaceNewPackage(url string) error {
 	if err != nil {
 		return err
 	}
-	defer compressedFile.Close()
+	defer func(compressedFile *os.File) {
+		_ = compressedFile.Close()
+	}(compressedFile)
+
+	if isChecksumVerified, err := u.compareChecksum(tempZipFile); !isChecksumVerified {
+		fmt.Println("Checksum verification failed, downloaded file is deleting now.")
+		_ = compressedFile.Close()
+		_ = os.Remove(tempZipFile)
+		if err != nil {
+			return err
+		}
+		return errors.New("checksum verification failed")
+	}
 
 	createdFileName, err := internal.FilenameWithExtension("client")
 
@@ -73,19 +202,12 @@ func (u *updateHelper) ReplaceNewPackage(url string) error {
 	if err = os.Chmod(currentApp, 0755); err != nil {
 		return err
 	}
-	fmt.Printf("Main process PID: %d\n", os.Getpid())
 
 	fmt.Println("Running new package.")
-	if err = u.runNewPackage(currentApp, "--stealth"); err != nil {
+	if err = u.runNewPackage(); err != nil {
 		return err
 	}
 
-	return nil
-}
-
-func (u *updateHelper) unzip(tempZipFile io.Reader) error {
-	r := tar.NewReader(tempZipFile)
-	log.Fatal(r.Next())
 	return nil
 }
 
@@ -110,15 +232,15 @@ func (u *updateHelper) downloadNewPackage(url, filePath string) error {
 	return nil
 }
 
-func (u *updateHelper) runNewPackage(params ...string) error {
+func (u *updateHelper) runNewPackage() error {
 	executable, err := os.Executable()
 	if err != nil {
 		return err
 	}
 
-	args := append([]string{executable})
-	fmt.Println(args)
-	cmd := exec.Command("open", args...)
+	// we can't use --stealth param since "open" doesn't allow.
+	//TODO:: find a solution if possible.
+	cmd := exec.Command("open", executable)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -127,24 +249,7 @@ func (u *updateHelper) runNewPackage(params ...string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("New PID: %d\n", cmd.Process.Pid)
 
-	return nil
-}
-
-func (u *updateHelper) ReleaseCurrentProcess() error {
-	pid := os.Getpid()
-	fmt.Printf("Current Process: %d\n", pid)
-	p, err := os.FindProcess(pid)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Releasing process %d\n", pid)
-	err = p.Release()
-	fmt.Printf("Released process %d\n", pid)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -155,9 +260,7 @@ func (u *updateHelper) KillCurrentProcess() error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Killing process %d\n", pid)
 	err = p.Kill()
-	fmt.Printf("Killed process %d\n", pid)
 	if err != nil {
 		return err
 	}
