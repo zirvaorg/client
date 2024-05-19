@@ -4,9 +4,6 @@ import (
 	"client/helpers"
 	"client/internal/package_url"
 	"fmt"
-	"os"
-	"os/signal"
-	"syscall"
 )
 
 const (
@@ -25,18 +22,22 @@ var Update = &helpers.Command{
 			return
 		}
 
-		sigs := make(chan os.Signal, 1)
-		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+		//sigs := make(chan os.Signal, 1)
+		//signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+		//
+		//fmt.Println("Update successful. Restarting the application...")
+		//go func() {
+		//	<-sigs
+		//	err := helpers.UpdateHelpers.KillCurrentProcess()
+		//	if err != nil {
+		//		fmt.Println("Old process couldn't be kill:", err)
+		//	}
+		//}()
 
-		fmt.Println("Update successful. Restarting the application...")
-		go func() {
-			<-sigs
-			err := helpers.UpdateHelpers.KillCurrentProcess()
-			if err != nil {
-				fmt.Println("Old process couldn't be kill:", err)
-			}
-		}()
+		err = helpers.UpdateHelpers.ReleaseCurrentProcess()
 
-		select {}
+		if err != nil {
+			fmt.Println("Main process release failed:", err)
+		}
 	},
 }

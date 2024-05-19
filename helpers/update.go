@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path"
 )
 
@@ -43,8 +42,12 @@ func (u *updateHelper) ReplaceNewPackage(url string) error {
 	}
 
 	createdFile, err := os.Create(path.Join(tempDir, createdFileName))
-	_ = os.Chmod(createdFile.Name(), 0777)
+
 	if err != nil {
+		return err
+	}
+
+	if err = os.Chmod(createdFile.Name(), 0777); err != nil {
 		return err
 	}
 	defer createdFile.Close()
@@ -102,25 +105,43 @@ func (u *updateHelper) downloadNewPackage(url, filePath string) error {
 }
 
 func (u *updateHelper) runNewPackage(params ...string) error {
-	fmt.Println(os.Args[0], append(os.Args[1:], params...))
-	cmd := exec.Command(os.Args[0], append(os.Args[1:], params...)...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-	err := cmd.Start()
+	p, err := os.StartProcess(os.Args[0], append(os.Args[1:], params...), &os.ProcAttr{
+		Files: []*os.File{os.Stdin, os.Stdout, os.Stderr},
+	})
 
-	fmt.Printf("New PID: %d\n", cmd.Process.Pid)
+	//cmd := exec.Command(os.Args[0], append(os.Args[1:], params...)...)
+	//cmd.Stdout = os.Stdout
+	//cmd.Stderr = os.Stderr
+	//cmd.Stdin = os.Stdin
+	//err := cmd.Start()
 
 	if err != nil {
 		return err
 	}
+	fmt.Printf("New PID: %d\n", p.Pid)
 
 	return nil
 }
 
-func (u *updateHelper) KillCurrentProcess() error {
-	fmt.Printf("Current Process: %d\n", os.Getpid())
+func (u *updateHelper) ReleaseCurrentProcess() error {
 	pid := os.Getpid()
+	fmt.Printf("Current Process: %d\n", pid)
+	p, err := os.FindProcess(pid)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Releasing process %d\n", pid)
+	err = p.Release()
+	fmt.Printf("Released process %d\n", pid)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (u *updateHelper) KillCurrentProcess() error {
+	pid := os.Getpid()
+	fmt.Printf("Current Process: %d\n", pid)
 	p, err := os.FindProcess(pid)
 	if err != nil {
 		return err
