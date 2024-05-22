@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"github.com/fatih/color"
-	"os"
 )
 
 var stealth *bool
@@ -27,8 +26,6 @@ func init() {
 func main() {
 	if *stealth {
 		if helpers.CheckAuth() {
-			fmt.Printf("New PID: %d\n", os.Getpid())
-			fmt.Println("New package just was downloaded is running now.")
 			cmd.Start.Run()
 			return
 		}
