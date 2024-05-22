@@ -72,13 +72,13 @@ func getLatestVersion() (*release, error) {
 	return releaseResp, nil
 }
 
-func (u *UpdateHelper) IsUpToDate(currentVersion string, latest *version.Version) (bool, error) {
+func (u *UpdateHelper) IsUpToDate(currentVersion string, latestVersion *version.Version) (bool, error) {
 	current, err := version.NewVersion(currentVersion)
 	if err != nil {
 		return false, err
 	}
 
-	return current.GreaterThanOrEqual(latest), nil // normally we should use just Equal but this way is safer.
+	return current.GreaterThanOrEqual(latestVersion), nil // normally we should use just Equal but this way is safer.
 }
 
 func (u *UpdateHelper) ReplaceNewPackage(url string) error {
