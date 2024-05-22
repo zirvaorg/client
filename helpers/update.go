@@ -1,50 +1,57 @@
 package helpers
 
 import (
-	"bufio"
 	"client/internal"
+	"client/internal/observer"
 	"client/internal/package_url"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/hashicorp/go-version"
-	"hash"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"path"
-	"strings"
 )
 
 type release struct {
 	TagName string `json:"tag_name"`
 }
 
-const (
-	githubReleaseApiUri         = "https://api.github.com/repos/zirvaorg/client/releases/latest"
-	bufferSize                  = 65536
-	latestChecksumFileUriFormat = "https://github.com/zirvaorg/client/releases/download/%s/client_%s_checksums.txt"
+type UpdateHelper struct {
+	decompressor     internal.Decompressor
+	checksumVerifier *internal.Checksum
+	observer         observer.Observer
+}
+
+const githubReleaseApiUri = "https://api.github.com/repos/zirvaorg/client/releases/latest"
+
+var (
+	UpdateHelpers = &UpdateHelper{
+		decompressor:     internal.NewUnzip(),
+		checksumVerifier: internal.NewChecksum(sha256.New()),
+		observer:         observer.Console{},
+	}
+	LatestVersion *version.Version
 )
 
 var (
-	UpdateHelpers = &updateHelper{
-		decompressor: internal.NewUnzip(),
-	}
-	LatestVersion *version.Version
+	ErrLatestVersionError  = errors.New("something went wrong when trying to determine the latest version")
+	ErrChecksumVerifyError = errors.New("failed to verify checksum")
 )
 
 func init() {
 	latestRelease, err := getLatestVersion()
 	if err != nil {
-		log.Fatal("Something went wrong when trying to determine the latest version")
+		log.Fatal(ErrLatestVersionError)
 		return
 	}
 	v, err := version.NewVersion(latestRelease.TagName)
 	if err != nil {
-		log.Fatal("Something went wrong when trying to determine the version")
+		log.Fatal(ErrLatestVersionError)
 		return
 	}
 	LatestVersion = v
@@ -65,11 +72,7 @@ func getLatestVersion() (*release, error) {
 	return releaseResp, nil
 }
 
-type updateHelper struct {
-	decompressor internal.Decompressor
-}
-
-func (u *updateHelper) IsUpToDate(currentVersion string, latest *version.Version) (bool, error) {
+func (u *UpdateHelper) IsUpToDate(currentVersion string, latest *version.Version) (bool, error) {
 	current, err := version.NewVersion(currentVersion)
 	if err != nil {
 		return false, err
@@ -78,67 +81,7 @@ func (u *updateHelper) IsUpToDate(currentVersion string, latest *version.Version
 	return current.GreaterThanOrEqual(latest), nil // normally we should use just Equal but this way is safer.
 }
 
-func (u *updateHelper) calculateChecksum(hashAlgorithm hash.Hash, reader io.Reader) (string, error) {
-	buf := make([]byte, bufferSize)
-
-	for {
-		switch n, err := reader.Read(buf); err {
-		case nil:
-			hashAlgorithm.Write(buf[:n])
-		case io.EOF:
-			return fmt.Sprintf("%x", hashAlgorithm.Sum(nil)), nil
-		default:
-			return "", errors.New("failed to calculate checksum")
-		}
-	}
-}
-
-func (u *updateHelper) compareChecksum(tempZipFilePath string) (bool, error) {
-	// create new file pointer so reading process won't affect the other one
-	reader, err := os.Open(tempZipFilePath)
-	if err != nil {
-		return false, err
-	}
-	actualChecksum, err := u.calculateChecksum(sha256.New(), reader)
-	if err != nil {
-		return false, err
-	}
-	expectedChecksum, err := u.getChecksumFromGithub()
-	if err != nil {
-		return false, err
-	}
-
-	fmt.Println(actualChecksum, expectedChecksum, actualChecksum == expectedChecksum)
-
-	return actualChecksum == expectedChecksum, nil
-}
-
-func (u *updateHelper) getChecksumFromGithub() (string, error) {
-	checksumUrl := fmt.Sprintf(latestChecksumFileUriFormat, LatestVersion.Original(), LatestVersion.String())
-
-	resp, err := http.Get(checksumUrl)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	fileScanner := bufio.NewScanner(resp.Body)
-	fileScanner.Split(bufio.ScanLines)
-
-	for fileScanner.Scan() {
-		line := strings.Split(fileScanner.Text(), "  ")
-		if len(line) != 2 || !strings.HasPrefix(line[1], "zirva") {
-			return "", errors.New("failed to parse checksum file")
-		}
-		if line[1] == fmt.Sprintf(package_url.ZipFileNameFormat, LatestVersion.Original()) {
-			fmt.Println("Related checksum was found from github")
-			return line[0], nil
-		}
-	}
-	return "", errors.New("failed to find checksum")
-}
-
-func (u *updateHelper) ReplaceNewPackage(url string) error {
+func (u *UpdateHelper) ReplaceNewPackage(url string) error {
 	tempDir := os.TempDir()
 	tempZipFile := path.Join(tempDir, fmt.Sprintf("%s.%s", "zirva-client", package_url.ZIP_FILE_EXTENSION))
 
@@ -147,30 +90,15 @@ func (u *updateHelper) ReplaceNewPackage(url string) error {
 		return err
 	}
 
-	compressedFile, err := os.Open(tempZipFile)
-	if err != nil {
-		return err
-	}
-	defer func(compressedFile *os.File) {
-		_ = compressedFile.Close()
-	}(compressedFile)
-
-	if isChecksumVerified, err := u.compareChecksum(tempZipFile); !isChecksumVerified {
-		fmt.Println("Checksum verification failed, downloaded file is deleting now.")
-		_ = compressedFile.Close()
+	if isChecksumVerified, err := u.checksumVerifier.Verify(LatestVersion, tempZipFile); !isChecksumVerified {
 		_ = os.Remove(tempZipFile)
 		if err != nil {
 			return err
 		}
-		return errors.New("checksum verification failed")
+		return ErrChecksumVerifyError
 	}
 
-	createdFileName, err := internal.FilenameWithExtension("client")
-
-	if err != nil {
-		return err
-	}
-
+	createdFileName := internal.FilenameWithExtension("client")
 	createdFile, err := os.Create(path.Join(tempDir, createdFileName))
 
 	if err != nil {
@@ -182,11 +110,11 @@ func (u *updateHelper) ReplaceNewPackage(url string) error {
 	}
 	defer createdFile.Close()
 
-	fmt.Println("Package has been downloaded. Decompressing now.")
-	if err = u.decompressor.Decompress(createdFile, compressedFile); err != nil {
+	u.notifyString("Package has been downloaded. Decompressing now.")
+	if err = u.decompressor.Decompress(createdFile, tempZipFile); err != nil {
 		return err
 	}
-	fmt.Println("Decompress complete.")
+	u.notifyString("Decompress complete.")
 
 	currentApp, err := os.Executable()
 
@@ -194,16 +122,16 @@ func (u *updateHelper) ReplaceNewPackage(url string) error {
 		return err
 	}
 
-	fmt.Println("Renaming...")
+	u.notifyString("Renaming...")
 	if err = os.Rename(createdFile.Name(), currentApp); err != nil {
 		return err
 	}
-	fmt.Println("Setting chmod")
+	u.notifyString("Setting chmod")
 	if err = os.Chmod(currentApp, 0755); err != nil {
 		return err
 	}
 
-	fmt.Println("Running new package.")
+	u.notifyString("Running new package.")
 	if err = u.runNewPackage(); err != nil {
 		return err
 	}
@@ -211,7 +139,13 @@ func (u *updateHelper) ReplaceNewPackage(url string) error {
 	return nil
 }
 
-func (u *updateHelper) downloadNewPackage(url, filePath string) error {
+func (u *UpdateHelper) notifyString(msg string) {
+	if u.observer != nil {
+		u.observer.Update(msg)
+	}
+}
+
+func (u *UpdateHelper) downloadNewPackage(url, filePath string) error {
 	file, err := os.Create(filePath)
 	if err != nil {
 		return err
@@ -232,7 +166,7 @@ func (u *updateHelper) downloadNewPackage(url, filePath string) error {
 	return nil
 }
 
-func (u *updateHelper) runNewPackage() error {
+func (u *UpdateHelper) runNewPackage() error {
 	executable, err := os.Executable()
 	if err != nil {
 		return err
@@ -253,9 +187,8 @@ func (u *updateHelper) runNewPackage() error {
 	return nil
 }
 
-func (u *updateHelper) KillCurrentProcess() error {
+func (u *UpdateHelper) KillCurrentProcess() error {
 	pid := os.Getpid()
-	fmt.Printf("Current Process: %d\n", pid)
 	p, err := os.FindProcess(pid)
 	if err != nil {
 		return err

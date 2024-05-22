@@ -6,17 +6,22 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"io"
+	"os"
 	"strings"
 )
 
-type Unzip struct{}
+func (u Unzip) decompress(dst io.Writer, src string) error {
+	var isDecompressed = false
 
-func NewUnzip() Unzip {
-	return Unzip{}
-}
+	compressedFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer func(compressedFile *os.File) {
+		_ = compressedFile.Close()
+	}(compressedFile)
 
-func (Unzip) Decompress(dst io.Writer, src io.Reader) error {
-	zipStream, err := gzip.NewReader(src)
+	zipStream, err := gzip.NewReader(compressedFile)
 	if err != nil {
 		return err
 	}
@@ -35,7 +40,7 @@ func (Unzip) Decompress(dst io.Writer, src io.Reader) error {
 			return err
 		}
 
-		if !strings.Contains(header.Name, "client") {
+		if !strings.Contains(header.Name, "client") || header.FileInfo().IsDir() {
 			continue
 		}
 
@@ -44,8 +49,13 @@ func (Unzip) Decompress(dst io.Writer, src io.Reader) error {
 			if err != nil {
 				return err
 			}
+			isDecompressed = true
 			break
 		}
+	}
+
+	if !isDecompressed {
+		return ErrExeNotDecompressed
 	}
 
 	return nil

@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	currentVersion = "v0.0.9"
+	currentVersion = "v0.0.8"
 )
 
 var Update = &helpers.Command{
@@ -24,6 +24,7 @@ var Update = &helpers.Command{
 		isUpToDate, err := helpers.UpdateHelpers.IsUpToDate(currentVersion, helpers.LatestVersion)
 		if err != nil {
 			fmt.Println("Error comparing two versions")
+			return
 		}
 
 		if isUpToDate {
@@ -39,18 +40,6 @@ var Update = &helpers.Command{
 			fmt.Println("Update failed:", err)
 			return
 		}
-
-		//sigs := make(chan os.Signal, 1)
-		//signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-		//
-		//fmt.Println("Update successful. Restarting the application...")
-		//go func() {
-		//	<-sigs
-		//	err := helpers.UpdateHelpers.KillCurrentProcess()
-		//	if err != nil {
-		//		fmt.Println("Old process couldn't be kill:", err)
-		//	}
-		//}()
 
 		err = helpers.UpdateHelpers.KillCurrentProcess()
 

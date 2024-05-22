@@ -2,14 +2,46 @@
 
 package internal
 
-import "io"
+import (
+	"archive/zip"
+	"io"
+	"strings"
+)
 
-type Unzip struct{}
+func (u Unzip) decompress(dst io.Writer, src string) error {
+	var isDecompressed = false
 
-func NewUnzip() Unzip {
-	return Unzip{}
-}
+	r, err := zip.OpenReader(src)
+	if err != nil {
+		return err
+	}
 
-func (Unzip) Decompress(dst io.Writer, src io.Reader) error {
+	defer r.Close()
+
+	for _, f := range r.File {
+		rc, err := f.Open()
+		if err != nil {
+			return err
+		}
+		defer rc.Close()
+
+		if !strings.Contains(f.Name, "client") || f.FileInfo().IsDir() {
+			continue
+		}
+
+		_, err = io.Copy(dst, rc)
+		if err != nil {
+			return err
+		}
+
+		isDecompressed = true
+
+		break // we just want to decompress one file which is named client, the one being executable.
+	}
+
+	if !isDecompressed {
+		return ErrExeNotDecompressed
+	}
+
 	return nil
 }
