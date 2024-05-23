@@ -81,22 +81,24 @@ func (u *UpdateHelper) IsUpToDate(currentVersion string, latestVersion *version.
 	return current.GreaterThanOrEqual(latestVersion), nil // normally we should use just Equal but this way is safer.
 }
 
-func (u *UpdateHelper) ReplaceNewPackage(url string) error {
+func (u *UpdateHelper) ReplaceNewPackage(packageUrl, checksumUrl string) error {
 	tempDir := os.TempDir()
 	tempZipFile := path.Join(tempDir, fmt.Sprintf("%s.%s", "zirva-client", package_url.ZIP_FILE_EXTENSION))
 
-	err := u.downloadNewPackage(url, tempZipFile)
+	err := u.downloadNewPackage(packageUrl, tempZipFile)
 	if err != nil {
 		return err
 	}
 
-	if isChecksumVerified, err := u.checksumVerifier.Verify(LatestVersion, tempZipFile); !isChecksumVerified {
+	if isChecksumVerified, err := u.checksumVerifier.Verify(checksumUrl, tempZipFile); !isChecksumVerified {
 		_ = os.Remove(tempZipFile)
 		if err != nil {
 			return err
 		}
 		return ErrChecksumVerifyError
 	}
+
+	u.notifyString("Checksum has been verified!")
 
 	createdFileName := internal.FilenameWithExtension("client")
 	createdFile, err := os.Create(path.Join(tempDir, createdFileName))

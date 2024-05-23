@@ -7,7 +7,8 @@ import (
 )
 
 const (
-	currentVersion = "v0.0.8"
+	currentVersion              = "v0.0.8"
+	latestChecksumFileUriFormat = "https://github.com/zirvaorg/client/releases/download/%s/client_%s_checksums.txt"
 )
 
 var Update = &helpers.Command{
@@ -35,7 +36,9 @@ var Update = &helpers.Command{
 		fmt.Println("Updating...")
 
 		packageURL := fmt.Sprintf(package_url.PackageURLFormat, helpers.LatestVersion.Original(), helpers.LatestVersion.Original())
-		err = helpers.UpdateHelpers.ReplaceNewPackage(packageURL)
+		checksumUrl := fmt.Sprintf(latestChecksumFileUriFormat, helpers.LatestVersion.Original(), helpers.LatestVersion.String())
+
+		err = helpers.UpdateHelpers.ReplaceNewPackage(packageURL, checksumUrl)
 		if err != nil {
 			fmt.Println("Update failed:", err)
 			return
