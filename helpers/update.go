@@ -27,7 +27,10 @@ type UpdateHelper struct {
 	observer         observer.Observer
 }
 
-const githubReleaseApiUri = "https://api.github.com/repos/zirvaorg/client/releases/latest"
+const (
+	githubReleaseApiUri = "https://api.github.com/repos/zirvaorg/client/releases/latest"
+	tempZipFileName     = "zirva-client"
+)
 
 var (
 	UpdateHelpers = &UpdateHelper{
@@ -35,10 +38,7 @@ var (
 		checksumVerifier: internal.NewChecksum(sha256.New()),
 		observer:         observer.Console{},
 	}
-	LatestVersion *version.Version
-)
-
-var (
+	LatestVersion          *version.Version
 	ErrLatestVersionError  = errors.New("something went wrong when trying to determine the latest version")
 	ErrChecksumVerifyError = errors.New("failed to verify checksum")
 )
@@ -83,7 +83,7 @@ func (u *UpdateHelper) IsUpToDate(currentVersion string, latestVersion *version.
 
 func (u *UpdateHelper) ReplaceNewPackage(packageUrl, checksumUrl string) error {
 	tempDir := os.TempDir()
-	tempZipFile := path.Join(tempDir, fmt.Sprintf("%s.%s", "zirva-client", package_url.ZIP_FILE_EXTENSION))
+	tempZipFile := path.Join(tempDir, fmt.Sprintf("%s.%s", tempZipFileName, package_url.ZIP_FILE_EXTENSION))
 
 	err := u.downloadNewPackage(packageUrl, tempZipFile)
 	if err != nil {
@@ -107,7 +107,7 @@ func (u *UpdateHelper) ReplaceNewPackage(packageUrl, checksumUrl string) error {
 		return err
 	}
 
-	if err = os.Chmod(createdFile.Name(), 0777); err != nil {
+	if err = os.Chmod(createdFile.Name(), 0555); err != nil {
 		return err
 	}
 	defer createdFile.Close()
