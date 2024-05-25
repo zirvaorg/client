@@ -17,6 +17,7 @@ func init() {
 	helpers.AddCommand(cmd.Logout)
 	helpers.AddCommand(cmd.Update)
 	helpers.AddCommand(cmd.Exit)
+	helpers.AddCommand(cmd.Pid)
 
 	stealth = flag.Bool("stealth", false, "run in stealth mode") // stealth mode for updating
 	flag.Parse()
