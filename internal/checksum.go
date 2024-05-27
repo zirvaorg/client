@@ -2,10 +2,10 @@ package internal
 
 import (
 	"bufio"
-	"client/helpers"
 	"client/internal/package_url"
 	"errors"
 	"fmt"
+	"github.com/hashicorp/go-version"
 	"hash"
 	"io"
 	"net/http"
@@ -33,8 +33,8 @@ func NewChecksum(hashAlgorithm hash.Hash) *Checksum {
 	}
 }
 
-func (c *Checksum) Verify(checksumUrl, filePath string) (bool, error) {
-	return c.compareChecksum(checksumUrl, filePath)
+func (c *Checksum) Verify(checksumUrl, filePath string, latestVersion version.Version) (bool, error) {
+	return c.compareChecksum(checksumUrl, filePath, latestVersion)
 }
 
 func (c *Checksum) calculateChecksum(reader io.Reader) (string, error) {
@@ -53,7 +53,7 @@ func (c *Checksum) calculateChecksum(reader io.Reader) (string, error) {
 	}
 }
 
-func (c *Checksum) compareChecksum(checksumUrl, filePath string) (bool, error) {
+func (c *Checksum) compareChecksum(checksumUrl, filePath string, latestVersion version.Version) (bool, error) {
 	// create new file pointer so reading process won't affect the other one
 	reader, err := os.Open(filePath)
 	if err != nil {
@@ -63,7 +63,7 @@ func (c *Checksum) compareChecksum(checksumUrl, filePath string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	expectedChecksum, err := c.getChecksumFromGithub(checksumUrl)
+	expectedChecksum, err := c.getChecksumFromGithub(checksumUrl, latestVersion)
 	if err != nil {
 		return false, err
 	}
@@ -71,7 +71,7 @@ func (c *Checksum) compareChecksum(checksumUrl, filePath string) (bool, error) {
 	return actualChecksum == expectedChecksum, nil
 }
 
-func (c *Checksum) getChecksumFromGithub(checksumUrl string) (string, error) {
+func (c *Checksum) getChecksumFromGithub(checksumUrl string, latestVersion version.Version) (string, error) {
 	resp, err := http.Get(checksumUrl)
 	if err != nil {
 		return "", err
@@ -86,7 +86,7 @@ func (c *Checksum) getChecksumFromGithub(checksumUrl string) (string, error) {
 		if len(line) != 2 || !strings.HasPrefix(line[1], "zirva") {
 			return "", ErrParseChecksumFileError
 		}
-		if line[1] == fmt.Sprintf(package_url.ZipFileNameFormat, helpers.LatestVersion.Original()) {
+		if line[1] == fmt.Sprintf(package_url.ZipFileNameFormat, latestVersion.Original()) {
 			return line[0], nil
 		}
 	}
