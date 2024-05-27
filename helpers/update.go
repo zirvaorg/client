@@ -90,7 +90,7 @@ func (u *UpdateHelper) ReplaceNewPackage(packageUrl, checksumUrl string) error {
 		return err
 	}
 
-	if isChecksumVerified, err := u.checksumVerifier.Verify(checksumUrl, tempZipFile); !isChecksumVerified {
+	if isChecksumVerified, err := u.checksumVerifier.Verify(checksumUrl, tempZipFile, *LatestVersion); !isChecksumVerified {
 		_ = os.Remove(tempZipFile)
 		if err != nil {
 			return err
